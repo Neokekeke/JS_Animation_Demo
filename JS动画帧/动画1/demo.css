@@ -1,0 +1,11 @@
+#rabbit{
+    width: 150px;
+    height: 150px;
+    position: absolute;
+    margin: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: 0;
+    background: url("demo.png") 0 150px no-repeat;
+}
