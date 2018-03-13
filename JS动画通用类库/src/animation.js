@@ -213,7 +213,6 @@ Animation.prototype._asyncTask = function(task){
 
 };
 
-
 /**
  * 切换到下一个任务
  * @private
