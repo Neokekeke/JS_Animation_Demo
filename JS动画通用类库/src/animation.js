@@ -3,6 +3,9 @@
  */
 'use strict'; // 严格模式下可以避免某些JS引起的错误
 
+var loadImage = require('./imageLoader'); //加载imageLoader的模块
+var TimeLine = require('./timeLine');
+
 /**
  * 常量记录帧动画的状态，方便调用接口时的状态记录
  * @type {number}
@@ -10,6 +13,10 @@
 const STATE_INITIAL = 0; // 动画的初始状态
 const STATE_START = 1;   // 动画开始的状态
 const STATE_STOP = 2;    // 动画结束的状态
+
+const TASK_SYNC = 0;     // 同步的任务
+const TASK_ASYNC = 1;    // 异步的任务
+
 /**
  * Animation的构造函数
  * @constructor
@@ -17,6 +24,7 @@ const STATE_STOP = 2;    // 动画结束的状态
 function Animation(){
     this.taskQueue = []; // 任务链,有同步任务和异步任务
     this.index = 0; // 任务链的索引位置
+    this.tiemLine = new TimeLine();
     this.state = STATE_INITIAL;
 }
 
@@ -32,7 +40,13 @@ function Animation(){
  * @param imgList 图片数组
  */
 Animation.prototype.loadImage = function(imgList){
+    var taskFn = function(next){
+        loadImage(imgList.slice() ,next );
+    };
 
+    //任务的类型
+    var type = TASK_SYNC;
+    return this._add(taskFn , type);
 };
 
 /**
@@ -67,7 +81,17 @@ Animation.prototype.then = function(callback){
  * @param interval
  */
 Animation.prototype.start = function(interval){
-
+    if(this.state == STATE_START){
+        return this;
+    }
+    //如果任务链中没有任务，也返回
+    if(!this.taskQueue.length){
+        return this;
+    }
+    this.state = STATE_START;
+    this.interval = interval;
+    this._runTask(); //执行任务方法
+    return this;
 };
 
 /**
@@ -115,6 +139,89 @@ Animation.prototype.dispose = function(){
 
 };
 
+/**
+ * 这是一个类内部调用的方法，添加一个任务到任务队列
+ * @param taskFn 传入的任务方法
+ * @param type   任务的类型
+ * @private
+ */
+Animation.prototype._add = function(taskFn , type){
+    this.taskQueue.push({
+        taskFn : taskFn,
+        type : type
+    });
+    return this; //链式调用的前提
+};
+
+/**
+ * 开始执行任务
+ * @private
+ */
+Animation.prototype._runTask = function(){
+    if(!this.taskQueue || this.state != STATE_START){
+        return;
+    }
+    //任务执行完毕
+    if(this.index === this.taskQueue.length){
+        this.dispose();
+        return;
+    }
+    var task = this.taskQueue[this.index];
+    if(task.type === TASK_SYNC){
+        this._syncTask(task);
+    }else{
+        this._asyncTask(task);
+    }
+};
+
+/**
+ * 同步任务执行
+ * @param task  一个任务对象
+ * @private
+ */
+Animation.prototype._syncTask = function(task){
+    var that = this;
+    var next = function(){
+        //切换到下一个任务
+        that._next();
+    };
+
+    var taskFn = task.taskFn;
+    taskFn(next);
+};
+
+/**
+ * 异步任务执行
+ * @param task  一个任务对象
+ * @private
+ */
+Animation.prototype._asyncTask = function(task){
+    var that = this;
+    var enterFrame = function(time){
+        var taskFn = task.taskFn;
+        var next = function(){
+            //停止当前任务
+            that.tiemLine.stop();
+            //执行下一个任务
+            that._next();
+        };
+        taskFn(next , time);
+    };
+
+    this.tiemLine.onenterFrame = enterFrame;
+    this.tiemLine.start(this.interval);
+
+};
+
+
+/**
+ * 切换到下一个任务
+ * @private
+ */
+Animation.prototype._next = function(){
+    this.index++;
+    this._runTask();
+};
 
 
 
